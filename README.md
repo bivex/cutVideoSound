@@ -13,7 +13,7 @@ brew install ffmpeg
 ### 2. Скачайте скрипт
 
 ```bash
-git clone https://github.com/ваш-юзернейм/cutVideoSound.git
+git clone https://github.com/bivex/cutVideoSound.git
 cd cutVideoSound
 ```
 
