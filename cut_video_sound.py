@@ -8,58 +8,45 @@ cut_video_sound.py
 import argparse
 import subprocess
 import sys
-import os
+from pathlib import Path
 
+def die(msg: str, hint: str | None = None) -> None:
+    """Выводит ошибку и завершает работу"""
+    print(f"❌ Ошибка: {msg}", file=sys.stderr)
+    if hint:
+        print(hint, file=sys.stderr)
+    sys.exit(1)
 
-def check_ffmpeg():
-    """Проверка наличия ffmpeg"""
-    try:
-        subprocess.run(
-            ["ffmpeg", "-version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True
-        )
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
-
-
-def remove_audio(input_file, output_file=None):
+def remove_audio(input_path: Path, output_path: Path | None = None) -> None:
     """Удаляет аудиодорожку из видео"""
 
-    if not os.path.exists(input_file):
-        print(f"❌ Ошибка: Файл '{input_file}' не найден")
-        sys.exit(1)
+    if not input_path.exists():
+        die(f"Файл не найден: '{input_path}'")
 
     # Генерация имени выходного файла
-    if output_file is None:
-        base, ext = os.path.splitext(input_file)
-        output_file = f"{base}_no_audio{ext}"
+    if output_path is None:
+        output_path = input_path.with_stem(f"{input_path.stem}_no_audio")
 
-    print(f"🎬 Обработка: {input_file}")
-    print(f"📁 Результат:  {output_file}")
-    print()
+    if output_path.exists():
+        die(f"Выходной файл уже существует: '{output_path}'",
+            "Удалите его или укажите другое имя")
 
-    # Запуск ffmpeg
-    cmd = [
-        "ffmpeg",
-        "-i", input_file,
-        "-c:v", "copy",  # Копировать видео без перекодирования
-        "-an",           # Отключить аудио
-        "-y",            # Перезаписать, если файл существует
-        output_file
-    ]
+    print(f"🎬 Обработка: {input_path}")
+    print(f"📁 Результат:  {output_path}\n")
 
+    # Запуск ffmpeg (stream copy без перекодирования)
     try:
-        subprocess.run(cmd, check=True)
-        print(f"✅ Готово! Видеофайл без звука сохранён: {output_file}")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Произошла ошибка при обработке")
-        sys.exit(1)
+        subprocess.run(
+            ["ffmpeg", "-nostdin", "-loglevel", "warning",
+             "-i", str(input_path), "-c:v", "copy", "-an", "-y", str(output_path)],
+            check=True,
+            capture_output=True
+        )
+        print(f"✅ Готово! Видеофайл без звука сохранён: {output_path}")
+    except subprocess.CalledProcessError:
+        die("Произошла ошибка при обработке")
 
-
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Удаляет аудиодорожку из видеофайла",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -73,20 +60,17 @@ def main():
         """
     )
 
-    parser.add_argument("input", help="Входной видеофайл")
-    parser.add_argument("output", nargs="?", help="Выходной файл (необязательно)")
+    parser.add_argument("input", type=Path, help="Входной видеофайл")
+    parser.add_argument("output", type=Path, nargs="?", help="Выходной файл")
 
     args = parser.parse_args()
 
-    if not check_ffmpeg():
-        print("❌ Ошибка: ffmpeg не установлен")
-        print()
-        print("Установите ffmpeg через Homebrew:")
-        print("  brew install ffmpeg")
-        sys.exit(1)
+    # Проверка ffmpeg (быстрее через shutil.which)
+    from shutil import which
+    if not which("ffmpeg"):
+        die("ffmpeg не установлен", "Установите: brew install ffmpeg")
 
     remove_audio(args.input, args.output)
-
 
 if __name__ == "__main__":
     main()
